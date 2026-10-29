@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClariTech Labs — Kajang Air Quality Node (ESP32-S3)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            node: {
+              bg: '#090d11',
+              card: '#11161d',
+              cardHover: '#161c25',
+              border: '#1f2937',
+              borderLight: '#374151',
+              accent: '#10b981',
+              cyan: '#06b6d4',
+              amber: '#f59e0b',
+              rose: '#ef4444'
+            }
+          },
+          fontFamily: {
+            mono: ['"Geist Mono"', 'monospace'],
+            sans: ['"Inter"', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #090d11;
+      color: #cbd5e1;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Precision Grid Layout Texture */
+    .bg-grid {
+      background-size: 24px 24px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    }
+
+    /* Custom Terminal Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #090d11; }
+    ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #374151; }
+  </style>
+</head>
+
+<body class="min-h-screen bg-grid flex flex-col justify-between selection:bg-emerald-500/20 selection:text-emerald-400">
+
+  <!-- TOP HEADER / ENGINEERING SYSTEM BAR -->
+  <header class="border-b border-node-border bg-node-bg/90 backdrop-blur-md sticky top-0 z-50 px-4 py-3 sm:px-8">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      
+      <!-- System Branding & Node ID -->
+      <div class="flex items-center space-x-3.5">
+        <div class="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-mono text-sm font-bold">
+          <i class="fa-solid fa-microchip"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight text-white font-mono">ClariTech Labs — Kajang Air Quality Node</h1>
+            <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-slate-800 text-slate-300 border border-slate-700">ESP32-S3</span>
+          </div>
+          <p class="text-xs text-slate-400 flex items-center gap-2 mt-0.5 font-mono">
+            <span>NODE_ID: <strong class="text-slate-200">Kajang-Air-01</strong></span>
+            <span>•</span>
+            <span>LOC: <strong class="text-slate-200">Kajang, Selangor (MY)</strong></span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Live Node Status & Action Buttons -->
+      <div class="flex flex-wrap items-center gap-2.5 text-xs font-mono w-full md:w-auto justify-end">
+        
+        <!-- Connection Status Pill -->
+        <div id="status-badge" class="flex items-center space-x-2 px-3 py-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="connection-status-text" class="font-semibold">SIMULATION MODE</span>
+        </div>
+
+        <!-- Last Sync Indicator -->
+        <div class="px-3 py-1.5 rounded-md bg-node-card border border-node-border text-slate-400">
+          SYNC: <span id="last-sync-time" class="text-slate-200">Just Now</span>
+        </div>
+
+        <!-- Documentation & Guide Toggle -->
+        <button id="toggle-guide-btn" class="px-3 py-1.5 rounded-md bg-node-card hover:bg-node-cardHover border border-node-border hover:border-node-borderLight text-slate-300 hover:text-white transition-all flex items-center space-x-1.5">
+          <i class="fa-solid fa-book-open text-xs text-emerald-400"></i>
+          <span>Setup & Deploy Guide</span>
+        </button>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN TELEMETRY CONTENT -->
+  <main class="max-w-7xl mx-auto px-4 py-6 sm:px-8 space-y-6 flex-grow w-full">
+
+    <!-- ESP32 HARDWARE INTEGRATION & PAYLOAD INSPECTOR -->
+    <section class="bg-node-card rounded-xl border border-node-border p-5 space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-node-border/80 pb-3">
+        <div class="flex items-center space-x-2 font-mono text-sm font-semibold text-white">
+          <i class="fa-solid fa-plug text-emerald-400"></i>
+          <span>Hardware Connection & Telemetry Bridge</span>
+        </div>
+        
+        <!-- Stream Mode Toggle Switch -->
+        <div class="flex items-center space-x-3 text-xs font-mono">
+          <span class="text-slate-400">Mode:</span>
+          <div class="inline-flex rounded-lg bg-node-bg p-0.5 border border-node-border">
+            <button id="btn-mode-sim" class="px-3 py-1 rounded-md bg-emerald-500 text-node-bg font-semibold transition-all">Simulation</button>
+            <button id="btn-mode-esp" class="px-3 py-1 rounded-md text-slate-400 hover:text-white transition-all">ESP32 Direct</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Controls & Input -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs font-mono">
+        <div class="md:col-span-5">
+          <label class="block text-slate-400 mb-1">ESP32 Local Endpoint / IP Address</label>
+          <div class="flex space-x-2">
+            <input type="text" id="esp32-endpoint" placeholder="http://192.168.1.100/api/data" value="http://192.168.1.100/api/data" disabled class="w-full bg-node-bg border border-node-border text-slate-300 disabled:opacity-50 rounded-lg px-3 py-2 focus:border-emerald-500 focus:outline-none">
+            <button id="connect-esp-btn" disabled class="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-node-bg font-semibold rounded-lg transition-colors whitespace-nowrap">
+              Connect
+            </button>
+          </div>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-slate-400 mb-1">Poll Rate</label>
+          <select id="poll-rate-select" class="w-full bg-node-bg border border-node-border text-slate-300 rounded-lg px-3 py-2 focus:border-emerald-500 focus:outline-none">
+            <option value="1000">1.0 Seconds</option>
+            <option value="2000" selected>2.0 Seconds</option>
+            <option value="5000">5.0 Seconds</option>
+          </select>
+        </div>
+
+        <div class="md:col-span-5">
+          <label class="block text-slate-400 mb-1">Live Telemetry JSON Frame Inspector</label>
+          <div id="json-inspector" class="bg-node-bg border border-node-border text-emerald-400 p-2 rounded-lg text-[11px] truncate select-all">
+            {"pm25": 12, "co_raw": 285, "temperature": 29.4, "humidity": 68}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETUP & DEPLOYMENT GUIDE (COLLAPSIBLE) -->
+    <section id="guide-drawer" class="hidden bg-node-card rounded-xl border border-emerald-500/30 p-6 space-y-6 animate-fadeIn">
+      <div class="flex items-center justify-between border-b border-node-border pb-4">
+        <div>
+          <h3 class="text-base font-bold text-white font-mono flex items-center gap-2">
+            <i class="fa-solid fa-code text-emerald-400"></i>
+            ESP32 Code Integration & Public Web Deployment
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Follow these instructions to connect physical hardware and host this dashboard online for free.</p>
+        </div>
+        <button id="close-guide-btn" class="text-slate-400 hover:text-white p-2">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs">
+        
+        <!-- Step 1: ESP32 Sketch Snippet -->
+        <div class="space-y-3">
+          <h4 class="font-mono font-semibold text-emerald-400 uppercase tracking-wider">1. ESP32 Arduino C++ Web Server Code</h4>
+          <p class="text-slate-300">Upload this endpoint handler to your ESP32-S3. Ensure CORS headers are enabled so the web dashboard can request telemetry directly:</p>
+          
+          <pre class="bg-node-bg border border-node-border text-slate-300 p-3 rounded-lg font-mono text-[11px] overflow-x-auto leading-relaxed"><code>#include &lt;WiFi.h&gt;
+#include &lt;WebServer.h&gt;
+
+WebServer server(80);
+
+void handleDataApi() {
+  // CORS Header required for browser access
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  
+  String json = "{";
+  json += "\"pm25\":" + String(readPM25()) + ",";
+  json += "\"co_raw\":" + String(analogRead(MQ7_PIN)) + ",";
+  json += "\"temperature\":" + String(dht.readTemperature(), 1) + ",";
+  json += "\"humidity\":" + String(dht.readHumidity(), 0);
+  json += "}";
+  
+  server.send(200, "application/json", json);
+}
+
+void setup() {
+  WiFi.begin("YOUR_WIFI_SSID", "YOUR_WIFI_PASSWORD");
+  server.on("/api/data", handleDataApi);
+  server.begin();
+}
+
+void loop() { server.handleClient(); }</code></pre>
+        </div>
+
+        <!-- Step 2: Public Hosting Instructions -->
+        <div class="space-y-3 font-mono">
+          <h4 class="font-semibold text-emerald-400 uppercase tracking-wider">2. Hosting the Dashboard Online (Free)</h4>
+          <div class="space-y-2 text-slate-300 text-[11px]">
+            <div class="p-3 bg-node-bg border border-node-border rounded-lg">
+              <strong class="text-white block mb-1">Option A: GitHub Pages (Recommended)</strong>
+              1. Create a public repository on GitHub.<br>
+              2. Upload this <code class="text-emerald-400">index.html</code> file.<br>
+              3. Go to <em>Settings $\rightarrow$ Pages $\rightarrow$ Branch: main</em> and click Save.<br>
+              4. Access your live public URL at <code class="text-cyan-400">https://yourusername.github.io/repo-name</code>.
+            </div>
+
+            <div class="p-3 bg-node-bg border border-node-border rounded-lg">
+              <strong class="text-white block mb-1">Option B: Vercel / Netlify</strong>
+              Drag & drop this folder into <a href="https://vercel.com" target="_blank" class="text-emerald-400 underline">Vercel</a> or <a href="https://netlify.com" target="_blank" class="text-cyan-400 underline">Netlify</a> for instant SSL-secured web hosting with custom domain support.
+            </div>
+
+            <div class="p-3 bg-node-bg border border-node-border rounded-lg">
+              <strong class="text-white block mb-1">Connecting Remote ESP32 to Internet</strong>
+              To read your ESP32 data outside your home Wi-Fi network, publish sensor updates to a free cloud broker like <strong>Adafruit IO</strong>, <strong>HiveMQ</strong>, or route your local ESP32 port using <strong>Cloudflare Tunnel / ngrok</strong>.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 4 PRIMARY METRIC CARDS -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- CARD 1: PM2.5 -->
+      <div class="bg-node-card rounded-xl border border-node-border p-5 hover:border-node-borderLight transition-all">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-mono font-semibold uppercase tracking-wider">PM2.5 Particulate</span>
+          <span id="pm25-badge" class="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">GOOD</span>
+        </div>
+        <div class="flex items-baseline space-x-2">
+          <span id="val-pm25" class="text-4xl font-extrabold font-mono text-white">12</span>
+          <span class="text-xs font-mono text-slate-400">µg/m³</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-3 font-mono">Sensor: <strong class="text-slate-300">PMS5003</strong> (Optical)</p>
+      </div>
+
+      <!-- CARD 2: Carbon Monoxide -->
+      <div class="bg-node-card rounded-xl border border-node-border p-5 hover:border-node-borderLight transition-all">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-mono font-semibold uppercase tracking-wider">Carbon Monoxide</span>
+          <span id="co-badge" class="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">NORMAL</span>
+        </div>
+        <div class="flex items-baseline space-x-2">
+          <span id="val-co" class="text-4xl font-extrabold font-mono text-white">285</span>
+          <span class="text-xs font-mono text-slate-400">ADC Raw</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-3 font-mono">Sensor: <strong class="text-slate-300">MQ-7</strong> (Electrochemical)</p>
+      </div>
+
+      <!-- CARD 3: Temperature -->
+      <div class="bg-node-card rounded-xl border border-node-border p-5 hover:border-node-borderLight transition-all">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-mono font-semibold uppercase tracking-wider">Temperature</span>
+          <span class="text-xs font-mono text-slate-400">Ambient</span>
+        </div>
+        <div class="flex items-baseline space-x-2">
+          <span id="val-temp" class="text-4xl font-extrabold font-mono text-white">29.4</span>
+          <span class="text-xs font-mono text-slate-400">°C</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-3 font-mono">Sensor: <strong class="text-slate-300">DHT22</strong> (Accuracy: ±0.5°C)</p>
+      </div>
+
+      <!-- CARD 4: Humidity -->
+      <div class="bg-node-card rounded-xl border border-node-border p-5 hover:border-node-borderLight transition-all">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-mono font-semibold uppercase tracking-wider">Relative Humidity</span>
+          <span class="text-xs font-mono text-slate-400">RH %</span>
+        </div>
+        <div class="flex items-baseline space-x-2">
+          <span id="val-hum" class="text-4xl font-extrabold font-mono text-white">68</span>
+          <span class="text-xs font-mono text-slate-400">%</span>
+        </div>
+        <p class="text-[11px] text-slate-400 mt-3 font-mono">Sensor: <strong class="text-slate-300">DHT22</strong> (Accuracy: ±2% RH)</p>
+      </div>
+
+    </section>
+
+    <!-- HISTORICAL GRAPH & TOGGLES -->
+    <section class="bg-node-card rounded-xl border border-node-border p-5 space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-node-border/80 pb-3">
+        <div>
+          <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+            <i class="fa-solid fa-chart-line text-emerald-400"></i>
+            Telemetry Trend Monitor (Last 24 Entries)
+          </h3>
+        </div>
+
+        <!-- Metric Toggles -->
+        <div class="flex items-center space-x-2 text-xs font-mono">
+          <button id="chart-toggle-pm" class="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">PM2.5</button>
+          <button id="chart-toggle-co" class="px-2.5 py-1 rounded bg-node-bg text-slate-400 border border-node-border hover:text-white">CO Raw</button>
+          <button id="chart-toggle-climate" class="px-2.5 py-1 rounded bg-node-bg text-slate-400 border border-node-border hover:text-white">Temp & Humidity</button>
+        </div>
+      </div>
+
+      <!-- Chart Container -->
+      <div class="h-72 w-full">
+        <canvas id="telemetryChart"></canvas>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-node-border bg-node-bg py-4 px-4 sm:px-8 mt-6">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-slate-500 gap-2">
+      <p>ClariTech Labs • Kajang Environmental Monitoring Initiative</p>
+      <p>ESP32-S3 Hardware Node (N16R8) • Active Telemetry</p>
+    </div>
+  </footer>
+
+  <!-- CONTROLLER SCRIPT -->
+  <script>
+    const appState = {
+      mode: 'simulation', // 'simulation' or 'esp'
+      endpoint: 'http://192.168.1.100/api/data',
+      pollInterval: 2000,
+      timer: null,
+      activeChartMetric: 'pm',
+      metrics: { pm25: 12, coRaw: 285, temp: 29.4, hum: 68 },
+      history: { labels: [], pm25: [], coRaw: [], temp: [], hum: [] }
+    };
+
+    let chart;
+
+    // Elements
+    const dom = {
+      statusText: document.getElementById('connection-status-text'),
+      statusBadge: document.getElementById('status-badge'),
+      lastSync: document.getElementById('last-sync-time'),
+      jsonInspector: document.getElementById('json-inspector'),
+      
+      btnSim: document.getElementById('btn-mode-sim'),
+      btnEsp: document.getElementById('btn-mode-esp'),
+      espEndpointInput: document.getElementById('esp32-endpoint'),
+      connectEspBtn: document.getElementById('connect-esp-btn'),
+      pollRateSelect: document.getElementById('poll-rate-select'),
+      
+      valPm25: document.getElementById('val-pm25'),
+      valCo: document.getElementById('val-co'),
+      valTemp: document.getElementById('val-temp'),
+      valHum: document.getElementById('val-hum'),
+      
+      pm25Badge: document.getElementById('pm25-badge'),
+      coBadge: document.getElementById('co-badge'),
+      
+      guideDrawer: document.getElementById('guide-drawer'),
+      toggleGuideBtn: document.getElementById('toggle-guide-btn'),
+      closeGuideBtn: document.getElementById('close-guide-btn')
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initChart();
+      setupEventListeners();
+      startLoop();
+    });
+
+    function initChart() {
+      const ctx = document.getElementById('telemetryChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: 'PM2.5 (µg/m³)',
+            data: [],
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.08)',
+            borderWidth: 2,
+            fill: true,
+            tension: 0.25,
+            pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color: 'rgba(255, 255, 255, 0.04)' }, ticks: { color: '#64748b', font: { family: 'Geist Mono', size: 10 } } },
+            y: { grid: { color: 'rgba(255, 255, 255, 0.04)' }, ticks: { color: '#64748b', font: { family: 'Geist Mono', size: 10 } } }
+          },
+          plugins: { legend: { labels: { color: '#94a3b8', font: { family: 'Inter', size: 11 } } } }
+        }
+      });
+    }
+
+    function setupEventListeners() {
+      // Guide Drawer Toggles
+      dom.toggleGuideBtn.addEventListener('click', () => dom.guideDrawer.classList.toggle('hidden'));
+      dom.closeGuideBtn.addEventListener('click', () => dom.guideDrawer.classList.add('hidden'));
+
+      // Mode Selection
+      dom.btnSim.addEventListener('click', () => switchMode('simulation'));
+      dom.btnEsp.addEventListener('click', () => switchMode('esp'));
+
+      // Connect Button
+      dom.connectEspBtn.addEventListener('click', () => {
+        appState.endpoint = dom.espEndpointInput.value.trim();
+        startLoop();
+      });
+
+      // Poll Rate
+      dom.pollRateSelect.addEventListener('change', (e) => {
+        appState.pollInterval = parseInt(e.target.value);
+        startLoop();
+      });
+
+      // Chart Metric Switches
+      document.getElementById('chart-toggle-pm').addEventListener('click', (e) => setChartMetric('pm', e.target));
+      document.getElementById('chart-toggle-co').addEventListener('click', (e) => setChartMetric('co', e.target));
+      document.getElementById('chart-toggle-climate').addEventListener('click', (e) => setChartMetric('climate', e.target));
+    }
+
+    function switchMode(mode) {
+      appState.mode = mode;
+      if (mode === 'simulation') {
+        dom.btnSim.className = "px-3 py-1 rounded-md bg-emerald-500 text-node-bg font-semibold transition-all";
+        dom.btnEsp.className = "px-3 py-1 rounded-md text-slate-400 hover:text-white transition-all";
+        dom.espEndpointInput.disabled = true;
+        dom.connectEspBtn.disabled = true;
+        setConnectionBadge("SIMULATION MODE", "emerald");
+      } else {
+        dom.btnEsp.className = "px-3 py-1 rounded-md bg-emerald-500 text-node-bg font-semibold transition-all";
+        dom.btnSim.className = "px-3 py-1 rounded-md text-slate-400 hover:text-white transition-all";
+        dom.espEndpointInput.disabled = false;
+        dom.connectEspBtn.disabled = false;
+        setConnectionBadge("CONNECTING TO ESP32...", "amber");
+      }
+      startLoop();
+    }
+
+    function startLoop() {
+      if (appState.timer) clearInterval(appState.timer);
+      if (appState.mode === 'simulation') {
+        appState.timer = setInterval(simulateTick, appState.pollInterval);
+      } else {
+        appState.timer = setInterval(pollESP32, appState.pollInterval);
+      }
+    }
+
+    function simulateTick() {
+      const pmDelta = (Math.random() - 0.48) * 1.2;
+      const coDelta = (Math.random() - 0.5) * 6;
+      const tempDelta = (Math.random() - 0.5) * 0.1;
+      const humDelta = (Math.random() - 0.5) * 0.4;
+
+      appState.metrics = {
+        pm25: Math.max(2, Math.min(100, appState.metrics.pm25 + pmDelta)),
+        coRaw: Math.max(150, Math.min(700, appState.metrics.coRaw + coDelta)),
+        temp: Math.max(20, Math.min(40, appState.metrics.temp + tempDelta)),
+        hum: Math.max(30, Math.min(90, appState.metrics.hum + humDelta))
+      };
+
+      updateUI(appState.metrics);
+    }
+
+    async function pollESP32() {
+      try {
+        const res = await fetch(appState.endpoint, { cache: 'no-cache' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        appState.metrics = {
+          pm25: data.pm25 || 0,
+          coRaw: data.co_raw || 0,
+          temp: data.temperature || 0,
+          hum: data.humidity || 0
+        };
+
+        setConnectionBadge("LIVE: ESP32 CONNECTED", "emerald");
+        updateUI(appState.metrics);
+      } catch (err) {
+        setConnectionBadge("ESP32 DISCONNECTED", "rose");
+      }
+    }
+
+    function updateUI(m) {
+      dom.valPm25.textContent = Math.round(m.pm25);
+      dom.valCo.textContent = Math.round(m.coRaw);
+      dom.valTemp.textContent = m.temp.toFixed(1);
+      dom.valHum.textContent = Math.round(m.hum);
+
+      // JSON Inspector update
+      const jsonStr = JSON.stringify({ pm25: Math.round(m.pm25), co_raw: Math.round(m.coRaw), temperature: parseFloat(m.temp.toFixed(1)), humidity: Math.round(m.hum) });
+      dom.jsonInspector.textContent = jsonStr;
+
+      // Status Badges
+      if (m.pm25 <= 12) {
+        dom.pm25Badge.textContent = "GOOD";
+        dom.pm25Badge.className = "px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30";
+      } else if (m.pm25 <= 35) {
+        dom.pm25Badge.textContent = "MODERATE";
+        dom.pm25Badge.className = "px-2 py-0.5 text-[10px] font-mono rounded bg-amber-500/10 text-amber-400 border border-amber-500/30";
+      } else {
+        dom.pm25Badge.textContent = "UNHEALTHY";
+        dom.pm25Badge.className = "px-2 py-0.5 text-[10px] font-mono rounded bg-rose-500/10 text-rose-400 border border-rose-500/30";
+      }
+
+      // Last Sync Timestamp
+      dom.lastSync.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      // Append Chart History
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (appState.history.labels.length >= 24) {
+        appState.history.labels.shift();
+        appState.history.pm25.shift();
+        appState.history.coRaw.shift();
+        appState.history.temp.shift();
+        appState.history.hum.shift();
+      }
+
+      appState.history.labels.push(time);
+      appState.history.pm25.push(m.pm25);
+      appState.history.coRaw.push(m.coRaw);
+      appState.history.temp.push(m.temp);
+      appState.history.hum.push(m.hum);
+
+      updateChartData();
+    }
+
+    function setChartMetric(metric, btn) {
+      appState.activeChartMetric = metric;
+      document.querySelectorAll('[id^="chart-toggle-"]').forEach(b => {
+        b.className = "px-2.5 py-1 rounded bg-node-bg text-slate-400 border border-node-border hover:text-white";
+      });
+      btn.className = "px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+      updateChartData();
+    }
+
+    function updateChartData() {
+      chart.data.labels = appState.history.labels;
+      
+      if (appState.activeChartMetric === 'pm') {
+        chart.data.datasets = [{
+          label: 'PM2.5 (µg/m³)',
+          data: appState.history.pm25,
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.08)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.25
+        }];
+      } else if (appState.activeChartMetric === 'co') {
+        chart.data.datasets = [{
+          label: 'CO Raw (ADC)',
+          data: appState.history.coRaw,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.25
+        }];
+      } else if (appState.activeChartMetric === 'climate') {
+        chart.data.datasets = [
+          {
+            label: 'Temperature (°C)',
+            data: appState.history.temp,
+            borderColor: '#ef4444',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.25
+          },
+          {
+            label: 'Humidity (%)',
+            data: appState.history.hum,
+            borderColor: '#06b6d4',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.25
+          }
+        ];
+      }
+      chart.update('none');
+    }
+
+    function setConnectionBadge(text, color) {
+      dom.statusText.textContent = text;
+      dom.statusBadge.className = `flex items-center space-x-2 px-3 py-1.5 rounded-md bg-${color}-500/10 border border-${color}-500/30 text-${color}-400`;
+    }
+  </script>
+</body>
+</html>
